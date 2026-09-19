@@ -1,0 +1,17 @@
+{
+  "name": "anonvote",
+  "scripts": {
+    "format": "biome format --write ."
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.3.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "@biomejs/biome": "^2.5.14"
+  }
+}

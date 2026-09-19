@@ -1,0 +1,43 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!.astro",
+      "!.cache",
+      "!.photo-manager",
+      "!photo-manager/target",
+      "!dist",
+      "!node_modules",
+      "!pnpm-lock.yaml",
+      "!public/fonts",
+      "!public/images",
+      "!public/videos",
+      "!src/assets"
+    ]
+  },
+  "formatter": {
+    "lineWidth": 120,
+    "indentStyle": "space"
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "html": {
+    "experimentalFullSupportEnabled": true,
+    "formatter": {
+      "enabled": true
+    },
+    "parser": {
+      "interpolation": true
+    }
+  },
+  "linter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  }
+}

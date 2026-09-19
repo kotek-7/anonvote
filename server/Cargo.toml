@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+actix-files = "0.7.0"
 actix-web = "4"
 anyhow = "1.0.104"
 blind-rsa-signatures = "0.17.2"
