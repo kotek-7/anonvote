@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS key_pairs (
+    id BIGSERIAL PRIMARY KEY,
+    pub_key TEXT NOT NULL,
+    sec_key TEXT NOT NULL
+);
