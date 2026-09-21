@@ -3,24 +3,22 @@ export interface CertificateRequest {
   pub_key: string;
 }
 
-async function post(path: string, body?: CertificateRequest): Promise<string> {
-  const response = await fetch(path, {
-    method: "POST",
-    ...(body && {
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  });
+export async function acquirePublicKey(): Promise<string> {
+  const response = await fetch("/api/pubkey", { method: "POST" });
   if (!response.ok) {
-    throw new Error(`API の呼び出しに失敗しました (${response.status}): ${path}`);
+    throw new Error(`公開鍵の取得に失敗しました (${response.status}): /api/pubkey`);
   }
   return response.text();
 }
 
-export function acquirePublicKey(): Promise<string> {
-  return post("/api/pubkey");
-}
-
-export function acquireCertificate(body: CertificateRequest): Promise<string> {
-  return post("/api/certificate", body);
+export async function acquireCertificate(body: CertificateRequest): Promise<string> {
+  const response = await fetch("/api/certificate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`署名の取得に失敗しました (${response.status}): /api/certificate`);
+  }
+  return response.text();
 }

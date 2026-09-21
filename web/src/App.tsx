@@ -1,54 +1,157 @@
-import type { ReactNode } from "react";
-import { useVerification } from "./useVerification";
+import { useEffect, useState } from "react";
+import { Output } from "./components/Output";
+import { Step } from "./components/Step";
+import * as api from "./lib/api";
+import * as crypto from "./lib/crypto";
+import type { BlindingResult } from "./lib/crypto";
 import "./App.css";
 
-function Output({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div className="output">
-      <span>{label}</span>
-      <pre>{value ?? "未生成"}</pre>
-    </div>
-  );
-}
-
-function Step({
-  number,
-  title,
-  location,
-  button,
-  disabled,
-  busy,
-  onClick,
-  children,
-}: {
-  number: number;
-  title: string;
-  location: string;
-  button: string;
-  disabled: boolean;
-  busy: boolean;
-  onClick: () => Promise<void>;
-  children: ReactNode;
-}) {
-  return (
-    <section className="step" aria-labelledby={`step-${number}`}>
-      <div className="step-heading">
-        <span className="step-number">{number}</span>
-        <h2 id={`step-${number}`}>{title}</h2>
-        <span className="location">{location}</span>
-      </div>
-      <button type="button" disabled={disabled} onClick={onClick} aria-busy={busy}>
-        {busy ? "処理中…" : button}
-      </button>
-      {children}
-    </section>
-  );
-}
-
 function App() {
-  const workflow = useVerification();
-  const { state } = workflow;
-  const disabled = !state.ready || state.pending !== null;
+  const [ready, setReady] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [blinding, setBlinding] = useState<BlindingResult | null>(null);
+  const [blindSignature, setBlindSignature] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [verification, setVerification] = useState<boolean | null>(null);
+
+  const disabled = !ready || pending !== null;
+
+  useEffect(() => {
+    let active = true;
+    crypto.initializeCrypto().then(
+      () => {
+        if (active) setReady(true);
+      },
+      (error: unknown) => {
+        if (active) {
+          const message = error instanceof Error ? error.message : String(error);
+          setError(`Wasm の読み込みに失敗しました。ページを再読み込みしてください。 ${message}`);
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleAcquirePublicKey() {
+    setPending("publicKey");
+    setError(null);
+    try {
+      const key = await api.acquirePublicKey();
+      setPublicKey(key);
+      // トークンは公開鍵に依存しない。ブラインド化以降だけやり直す。
+      setBlinding(null);
+      setBlindSignature(null);
+      setSignature(null);
+      setVerification(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function handleGenerateToken() {
+    setPending("token");
+    setError(null);
+    try {
+      const newToken = await crypto.generateToken();
+      setToken(newToken);
+      // 新しいトークンには、以前のブラインド化結果や署名を使えない。
+      setBlinding(null);
+      setBlindSignature(null);
+      setSignature(null);
+      setVerification(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function handleBlindToken() {
+    if (!publicKey || !token) return;
+
+    setPending("blinding");
+    setError(null);
+    try {
+      const result = await crypto.blindToken(token, publicKey);
+      setBlinding(result);
+      setBlindSignature(null);
+      setSignature(null);
+      setVerification(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function handleAcquireCertificate() {
+    if (!publicKey || !blinding) return;
+
+    setPending("blindSignature");
+    setError(null);
+    try {
+      const certificate = await api.acquireCertificate({
+        pub_key: publicKey,
+        blind_token: blinding.blind_token,
+      });
+      setBlindSignature(certificate);
+      setSignature(null);
+      setVerification(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function handleFinalizeToken() {
+    if (!publicKey || !token || !blinding || !blindSignature) return;
+
+    setPending("signature");
+    setError(null);
+    try {
+      const result = await crypto.finalizeToken(publicKey, blindSignature, blinding, token);
+      setSignature(result);
+      setVerification(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function handleVerifyToken() {
+    if (!publicKey || !token || !signature) return;
+
+    setPending("verification");
+    setError(null);
+    try {
+      const valid = await crypto.verifyToken(publicKey, signature, token);
+      setVerification(valid);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  function handleReset() {
+    setPublicKey(null);
+    setToken(null);
+    setBlinding(null);
+    setBlindSignature(null);
+    setSignature(null);
+    setVerification(null);
+    setError(null);
+  }
 
   return (
     <main>
@@ -57,90 +160,83 @@ function App() {
         <h1>ブラインド署名の検証</h1>
         <p>トークンを生成し、サーバーの署名を取得して、ブラウザで検証します。</p>
         <div className="toolbar">
-          <p role="status">
-            {state.ready ? "準備完了" : state.error ? "初期化に失敗しました" : "Wasm を読み込んでいます…"}
-          </p>
-          <button type="button" className="secondary" onClick={workflow.reset} disabled={disabled}>
+          <p role="status">{ready ? "準備完了" : error ? "初期化に失敗しました" : "Wasm を読み込んでいます…"}</p>
+          <button type="button" className="secondary" onClick={handleReset} disabled={disabled}>
             最初からやり直す
           </button>
         </div>
       </header>
-      {state.error && (
+      {error && (
         <p className="error" role="alert">
-          {state.error}
+          {error}
         </p>
       )}
       <div className="steps">
-        <Step
-          number={1}
-          title="公開鍵"
-          location="サーバー"
-          button="公開鍵を取得"
-          disabled={disabled}
-          busy={state.pending === "publicKey"}
-          onClick={workflow.acquirePublicKey}
-        >
-          <Output label="Public Key" value={state.publicKey} />
+        <Step number={1} title="公開鍵" location="サーバー">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={handleAcquirePublicKey}
+            aria-busy={pending === "publicKey"}
+          >
+            {pending === "publicKey" ? "処理中…" : "公開鍵を取得"}
+          </button>
+          <Output label="Public Key" value={publicKey} />
         </Step>
-        <Step
-          number={2}
-          title="トークン"
-          location="ブラウザ"
-          button="トークンを生成"
-          disabled={disabled}
-          busy={state.pending === "token"}
-          onClick={workflow.generateToken}
-        >
-          <Output label="Token" value={state.token} />
+        <Step number={2} title="トークン" location="ブラウザ">
+          <button type="button" disabled={disabled} onClick={handleGenerateToken} aria-busy={pending === "token"}>
+            {pending === "token" ? "処理中…" : "トークンを生成"}
+          </button>
+          <Output label="Token" value={token} />
         </Step>
-        <Step
-          number={3}
-          title="ブラインド化"
-          location="ブラウザ"
-          button="トークンをブラインド化"
-          disabled={disabled || !state.publicKey || !state.token}
-          busy={state.pending === "blinding"}
-          onClick={workflow.blind}
-        >
-          <Output label="Blind Token" value={state.blinding?.blind_token} />
-          <Output label="Secret" value={state.blinding?.secret} />
+        <Step number={3} title="ブラインド化" location="ブラウザ">
+          <button
+            type="button"
+            disabled={disabled || !publicKey || !token}
+            onClick={handleBlindToken}
+            aria-busy={pending === "blinding"}
+          >
+            {pending === "blinding" ? "処理中…" : "トークンをブラインド化"}
+          </button>
+          <Output label="Blind Token" value={blinding?.blind_token} />
+          <Output label="Secret" value={blinding?.secret} />
         </Step>
-        <Step
-          number={4}
-          title="署名の取得"
-          location="サーバー"
-          button="署名を取得"
-          disabled={disabled || !state.blinding}
-          busy={state.pending === "blindSignature"}
-          onClick={workflow.acquireCertificate}
-        >
-          <Output label="Blind Token Signature" value={state.blindSignature} />
+        <Step number={4} title="署名の取得" location="サーバー">
+          <button
+            type="button"
+            disabled={disabled || !publicKey || !blinding}
+            onClick={handleAcquireCertificate}
+            aria-busy={pending === "blindSignature"}
+          >
+            {pending === "blindSignature" ? "処理中…" : "署名を取得"}
+          </button>
+          <Output label="Blind Token Signature" value={blindSignature} />
         </Step>
-        <Step
-          number={5}
-          title="署名の復元"
-          location="ブラウザ"
-          button="署名を復元"
-          disabled={disabled || !state.blindSignature}
-          busy={state.pending === "signature"}
-          onClick={workflow.finalize}
-        >
-          <Output label="Token Signature" value={state.signature} />
+        <Step number={5} title="署名の復元" location="ブラウザ">
+          <button
+            type="button"
+            disabled={disabled || !publicKey || !token || !blinding || !blindSignature}
+            onClick={handleFinalizeToken}
+            aria-busy={pending === "signature"}
+          >
+            {pending === "signature" ? "処理中…" : "署名を復元"}
+          </button>
+          <Output label="Token Signature" value={signature} />
         </Step>
-        <Step
-          number={6}
-          title="署名の検証"
-          location="ブラウザ"
-          button="署名を検証"
-          disabled={disabled || !state.signature}
-          busy={state.pending === "verification"}
-          onClick={workflow.verify}
-        >
+        <Step number={6} title="署名の検証" location="ブラウザ">
+          <button
+            type="button"
+            disabled={disabled || !publicKey || !token || !signature}
+            onClick={handleVerifyToken}
+            aria-busy={pending === "verification"}
+          >
+            {pending === "verification" ? "処理中…" : "署名を検証"}
+          </button>
           <p
             role="status"
-            className={state.verification === null ? "result" : state.verification ? "result success" : "result error"}
+            className={verification === null ? "result" : verification ? "result success" : "result error"}
           >
-            {state.verification === null ? "未検証" : state.verification ? "検証成功" : "検証失敗"}
+            {verification === null ? "未検証" : verification ? "検証成功" : "検証失敗"}
           </p>
         </Step>
       </div>
