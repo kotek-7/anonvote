@@ -1,3 +1,6 @@
+mod common;
+mod pubkey_handle;
+
 use actix_web::{HttpResponse, middleware::Logger};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
