@@ -54,7 +54,7 @@ async fn start_server(pool: sqlx::Pool<Postgres>) -> std::io::Result<()> {
             .app_data(pool.clone())
             .service(pubkey)
             .service(certificate)
-            .service(actix_files::Files::new("/", "./static").index_file("index.html"))
+            .service(actix_files::Files::new("/", "./web/dist").index_file("index.html"))
     })
     .bind(("127.0.0.1", 8080))?
     .run()
