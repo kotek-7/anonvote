@@ -65,13 +65,14 @@ type SecretKey = blind_rsa_signatures::SecretKey<Sha384, PSS, Randomized>;
 #[actix_web::post("/api/pubkey")]
 async fn pubkey(pool: actix_web::web::Data<sqlx::PgPool>) -> impl actix_web::Responder {
     let key_pair = match fetch_key_pair(&pool).await {
-        Ok(key_pair) => key_pair.unwrap_or(match generate_and_save_key_pair(&pool).await {
+        Ok(Some(key_pair)) => key_pair,
+        Ok(None) => match generate_and_save_key_pair(&pool).await {
             Ok(key_pair) => key_pair,
             Err(e) => {
                 log::error!("{e}");
                 return HttpResponse::InternalServerError().finish();
             }
-        }),
+        },
         Err(e) => {
             log::error!("{e}");
             return HttpResponse::InternalServerError().finish();
