@@ -7,10 +7,32 @@
 
   <body>
     <script type="module" src="./script.js"></script>
-    <button id="acquire-pubkey">Acquire Public Key</button>
-    <div>Public Key: <span id="pubkey"></span></div>
-    <button id="generate">Generate Token</button>
-    <div>Token: <span id="token"></span></div>
-    <div>Blinded Token: <span id="blinded-token"></span></div>
+
+    <div>
+      <button id="acquire-pubkey">Acquire Public Key</button>
+      <div>Public Key: <span id="pubkey"></span></div>
+    </div>
+
+    <div>
+      <button id="generate">Generate Token</button>
+      <div>Token: <span id="token"></span></div>
+    </div>
+
+    <div>
+      <button id="blind">Blind Token</button>
+      <div>Blind Token: <span id="blind-token"></span></div>
+      <div>Secret: <span id="secret"></span></div>
+      <div>Token Randomizer: <span id="token-randomizer"></span></div>
+    </div>
+
+    <div>
+      <button id="certificate">Certificate</button>
+      <div>Blind Token Sign: <span id="blind-token-sign"></span></div>
+    </div>
+
+    <div>
+      <button id="finalize">Finalize</button>
+      <div>Token Sign: <span id="token-sign"></span></div>
+    </div>
   </body>
 </html>
