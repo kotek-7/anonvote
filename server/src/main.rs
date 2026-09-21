@@ -1,10 +1,9 @@
+mod certificate_handle;
 mod common;
 mod pubkey_handle;
 
-use crate::common::{KeyPair, PublicKey, RawKeyPair, SecretKey};
+use crate::certificate_handle::SignBlindTokenError;
 use actix_web::{HttpResponse, middleware::Logger};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use clap::Parser;
 use sqlx::{Postgres, postgres::PgPoolOptions};
 
@@ -74,9 +73,9 @@ async fn pubkey(pool: actix_web::web::Data<sqlx::PgPool>) -> impl actix_web::Res
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 struct CertificateRequest {
-    /// base64 encoded blinded token
+    /// Base64-encoded blinded token.
     pub blind_token: String,
-    /// PEM encoded public key
+    /// PEM-encoded public key.
     pub pub_key: String,
 }
 
@@ -85,52 +84,16 @@ async fn certificate(
     req: actix_web::web::Json<CertificateRequest>,
     pool: actix_web::web::Data<sqlx::PgPool>,
 ) -> impl actix_web::Responder {
-    let pub_key = match PublicKey::from_pem(&req.pub_key) {
-        Ok(pub_key) => pub_key,
-        Err(e) => {
+    match certificate_handle::sign_blind_token(&req.pub_key, &req.blind_token, pool.get_ref()).await
+    {
+        Ok(signature) => HttpResponse::Ok().body(signature),
+        Err(e @ (SignBlindTokenError::InvalidPublicKey(_) | SignBlindTokenError::Decode(_))) => {
             log::warn!("{e}");
-            return HttpResponse::BadRequest().finish();
+            HttpResponse::BadRequest().finish()
         }
-    };
-    let key_pair = match search_key_pair(&pub_key, pool.get_ref()).await {
-        Ok(key_pair) => key_pair,
-        Err(e) => {
+        Err(e @ (SignBlindTokenError::Search(_) | SignBlindTokenError::Sign(_))) => {
             log::error!("{e}");
-            return HttpResponse::InternalServerError().finish();
+            HttpResponse::InternalServerError().finish()
         }
-    };
-    let blind_token = match STANDARD.decode(&req.blind_token) {
-        Ok(blind_token) => blind_token,
-        Err(e) => {
-            log::warn!("{e}");
-            return HttpResponse::BadRequest().finish();
-        }
-    };
-    let blind_token_sign = match key_pair.sk.blind_sign(&blind_token) {
-        Ok(blind_token_sign) => blind_token_sign,
-        Err(e) => {
-            log::error!("{e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-    let blind_token_sign_base64 = STANDARD.encode(blind_token_sign);
-    HttpResponse::Ok().body(blind_token_sign_base64)
-}
-
-async fn search_key_pair(
-    pub_key: &PublicKey,
-    pool: &sqlx::Pool<Postgres>,
-) -> anyhow::Result<KeyPair> {
-    let pub_key = &pub_key.to_pem()?;
-    let key_pair = sqlx::query_as!(
-        RawKeyPair,
-        "SELECT * FROM key_pairs WHERE pub_key = $1",
-        &pub_key
-    )
-    .fetch_one(pool)
-    .await?;
-    Ok(KeyPair {
-        pk: PublicKey::from_pem(&key_pair.pub_key)?,
-        sk: SecretKey::from_pem(&key_pair.sec_key)?,
-    })
+    }
 }
