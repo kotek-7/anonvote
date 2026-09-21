@@ -3,7 +3,7 @@ export interface CertificateRequest {
   pub_key: string;
 }
 
-export async function acquirePublicKey(): Promise<string> {
+export async function acquirePubKey(): Promise<string> {
   const response = await fetch("/api/pubkey", { method: "POST" });
   if (!response.ok) {
     throw new Error(`公開鍵の取得に失敗しました (${response.status}): /api/pubkey`);
@@ -11,7 +11,7 @@ export async function acquirePublicKey(): Promise<string> {
   return response.text();
 }
 
-export async function acquireCertificate(body: CertificateRequest): Promise<string> {
+export async function certificate(body: CertificateRequest): Promise<string> {
   const response = await fetch("/api/certificate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

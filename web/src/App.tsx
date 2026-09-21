@@ -11,18 +11,18 @@ function App() {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [pubKey, setPubKey] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [blinding, setBlinding] = useState<BlindingResult | null>(null);
-  const [blindSignature, setBlindSignature] = useState<string | null>(null);
-  const [signature, setSignature] = useState<string | null>(null);
+  const [blindingResult, setBlindingResult] = useState<BlindingResult | null>(null);
+  const [blindTokenSign, setBlindTokenSign] = useState<string | null>(null);
+  const [tokenSign, setTokenSign] = useState<string | null>(null);
   const [verification, setVerification] = useState<boolean | null>(null);
 
   const disabled = !ready || pending !== null;
 
   useEffect(() => {
     let active = true;
-    crypto.initializeCrypto().then(
+    crypto.init().then(
       () => {
         if (active) setReady(true);
       },
@@ -38,16 +38,16 @@ function App() {
     };
   }, []);
 
-  async function handleAcquirePublicKey() {
-    setPending("publicKey");
+  async function handleAcquire() {
+    setPending("acquire-pubkey");
     setError(null);
     try {
-      const key = await api.acquirePublicKey();
-      setPublicKey(key);
+      const pubKey = await api.acquirePubKey();
+      setPubKey(pubKey);
       // トークンは公開鍵に依存しない。ブラインド化以降だけやり直す。
-      setBlinding(null);
-      setBlindSignature(null);
-      setSignature(null);
+      setBlindingResult(null);
+      setBlindTokenSign(null);
+      setTokenSign(null);
       setVerification(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -56,16 +56,16 @@ function App() {
     }
   }
 
-  async function handleGenerateToken() {
-    setPending("token");
+  async function handleGenerate() {
+    setPending("generate");
     setError(null);
     try {
-      const newToken = await crypto.generateToken();
+      const newToken = await crypto.generate_token();
       setToken(newToken);
       // 新しいトークンには、以前のブラインド化結果や署名を使えない。
-      setBlinding(null);
-      setBlindSignature(null);
-      setSignature(null);
+      setBlindingResult(null);
+      setBlindTokenSign(null);
+      setTokenSign(null);
       setVerification(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -74,16 +74,16 @@ function App() {
     }
   }
 
-  async function handleBlindToken() {
-    if (!publicKey || !token) return;
+  async function handleBlind() {
+    if (!pubKey || !token) return;
 
-    setPending("blinding");
+    setPending("blind");
     setError(null);
     try {
-      const result = await crypto.blindToken(token, publicKey);
-      setBlinding(result);
-      setBlindSignature(null);
-      setSignature(null);
+      const blindingResult = await crypto.blind(token, pubKey);
+      setBlindingResult(blindingResult);
+      setBlindTokenSign(null);
+      setTokenSign(null);
       setVerification(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -92,18 +92,18 @@ function App() {
     }
   }
 
-  async function handleAcquireCertificate() {
-    if (!publicKey || !blinding) return;
+  async function handleCertificate() {
+    if (!pubKey || !blindingResult) return;
 
-    setPending("blindSignature");
+    setPending("certificate");
     setError(null);
     try {
-      const certificate = await api.acquireCertificate({
-        pub_key: publicKey,
-        blind_token: blinding.blind_token,
+      const blindTokenSign = await api.certificate({
+        pub_key: pubKey,
+        blind_token: blindingResult.blind_token,
       });
-      setBlindSignature(certificate);
-      setSignature(null);
+      setBlindTokenSign(blindTokenSign);
+      setTokenSign(null);
       setVerification(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -112,14 +112,14 @@ function App() {
     }
   }
 
-  async function handleFinalizeToken() {
-    if (!publicKey || !token || !blinding || !blindSignature) return;
+  async function handleFinalize() {
+    if (!pubKey || !token || !blindingResult || !blindTokenSign) return;
 
-    setPending("signature");
+    setPending("finalize");
     setError(null);
     try {
-      const result = await crypto.finalizeToken(publicKey, blindSignature, blinding, token);
-      setSignature(result);
+      const tokenSign = await crypto.finalize(pubKey, blindTokenSign, blindingResult, token);
+      setTokenSign(tokenSign);
       setVerification(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -128,14 +128,14 @@ function App() {
     }
   }
 
-  async function handleVerifyToken() {
-    if (!publicKey || !token || !signature) return;
+  async function handleVerify() {
+    if (!pubKey || !token || !tokenSign) return;
 
-    setPending("verification");
+    setPending("verify");
     setError(null);
     try {
-      const valid = await crypto.verifyToken(publicKey, signature, token);
-      setVerification(valid);
+      const verification = await crypto.verify(pubKey, tokenSign, token);
+      setVerification(verification);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -144,11 +144,11 @@ function App() {
   }
 
   function handleReset() {
-    setPublicKey(null);
+    setPubKey(null);
     setToken(null);
-    setBlinding(null);
-    setBlindSignature(null);
-    setSignature(null);
+    setBlindingResult(null);
+    setBlindTokenSign(null);
+    setTokenSign(null);
     setVerification(null);
     setError(null);
   }
@@ -176,63 +176,75 @@ function App() {
           <button
             type="button"
             disabled={disabled}
-            onClick={handleAcquirePublicKey}
-            aria-busy={pending === "publicKey"}
+            id="acquire-pubkey"
+            onClick={handleAcquire}
+            aria-busy={pending === "acquire-pubkey"}
           >
-            {pending === "publicKey" ? "処理中…" : "公開鍵を取得"}
+            {pending === "acquire-pubkey" ? "処理中…" : "公開鍵を取得"}
           </button>
-          <Output label="Public Key" value={publicKey} />
+          <Output id="pubkey" label="Public Key" value={pubKey} />
         </Step>
         <Step number={2} title="トークン" location="ブラウザ">
-          <button type="button" disabled={disabled} onClick={handleGenerateToken} aria-busy={pending === "token"}>
-            {pending === "token" ? "処理中…" : "トークンを生成"}
+          <button
+            type="button"
+            disabled={disabled}
+            id="generate"
+            onClick={handleGenerate}
+            aria-busy={pending === "generate"}
+          >
+            {pending === "generate" ? "処理中…" : "トークンを生成"}
           </button>
-          <Output label="Token" value={token} />
+          <Output id="token" label="Token" value={token} />
         </Step>
         <Step number={3} title="ブラインド化" location="ブラウザ">
           <button
             type="button"
-            disabled={disabled || !publicKey || !token}
-            onClick={handleBlindToken}
-            aria-busy={pending === "blinding"}
+            disabled={disabled || !pubKey || !token}
+            id="blind"
+            onClick={handleBlind}
+            aria-busy={pending === "blind"}
           >
-            {pending === "blinding" ? "処理中…" : "トークンをブラインド化"}
+            {pending === "blind" ? "処理中…" : "トークンをブラインド化"}
           </button>
-          <Output label="Blind Token" value={blinding?.blind_token} />
-          <Output label="Secret" value={blinding?.secret} />
+          <Output id="blind-token" label="Blind Token" value={blindingResult?.blind_token} />
+          <Output id="secret" label="Secret" value={blindingResult?.secret} />
         </Step>
         <Step number={4} title="署名の取得" location="サーバー">
           <button
             type="button"
-            disabled={disabled || !publicKey || !blinding}
-            onClick={handleAcquireCertificate}
-            aria-busy={pending === "blindSignature"}
+            disabled={disabled || !pubKey || !blindingResult}
+            id="certificate"
+            onClick={handleCertificate}
+            aria-busy={pending === "certificate"}
           >
-            {pending === "blindSignature" ? "処理中…" : "署名を取得"}
+            {pending === "certificate" ? "処理中…" : "署名を取得"}
           </button>
-          <Output label="Blind Token Signature" value={blindSignature} />
+          <Output id="blind-token-sign" label="Blind Token Sign" value={blindTokenSign} />
         </Step>
         <Step number={5} title="署名の復元" location="ブラウザ">
           <button
             type="button"
-            disabled={disabled || !publicKey || !token || !blinding || !blindSignature}
-            onClick={handleFinalizeToken}
-            aria-busy={pending === "signature"}
+            disabled={disabled || !pubKey || !token || !blindingResult || !blindTokenSign}
+            id="finalize"
+            onClick={handleFinalize}
+            aria-busy={pending === "finalize"}
           >
-            {pending === "signature" ? "処理中…" : "署名を復元"}
+            {pending === "finalize" ? "処理中…" : "署名を復元"}
           </button>
-          <Output label="Token Signature" value={signature} />
+          <Output id="token-sign" label="Token Sign" value={tokenSign} />
         </Step>
         <Step number={6} title="署名の検証" location="ブラウザ">
           <button
             type="button"
-            disabled={disabled || !publicKey || !token || !signature}
-            onClick={handleVerifyToken}
-            aria-busy={pending === "verification"}
+            disabled={disabled || !pubKey || !token || !tokenSign}
+            id="verify"
+            onClick={handleVerify}
+            aria-busy={pending === "verify"}
           >
-            {pending === "verification" ? "処理中…" : "署名を検証"}
+            {pending === "verify" ? "処理中…" : "署名を検証"}
           </button>
           <p
+            id="verification"
             role="status"
             className={verification === null ? "result" : verification ? "result success" : "result error"}
           >

@@ -1,52 +1,52 @@
-import init, { blind, finalize, generate_token, verify } from "../../wasm/wasm.js";
+import initWasm, * as wasm from "../../wasm/wasm.js";
 
 export interface BlindingResult {
   blind_token: string;
   secret: string;
 }
 
-let initialization: ReturnType<typeof init> | undefined;
+let initialization: ReturnType<typeof initWasm> | undefined;
 
-export function initializeCrypto() {
-  initialization ??= init().catch((error: unknown) => {
+export function init() {
+  initialization ??= initWasm().catch((error: unknown) => {
     initialization = undefined;
     throw error;
   });
   return initialization;
 }
 
-export async function generateToken(): Promise<string> {
-  await initializeCrypto();
-  return generate_token();
+export async function generate_token(): Promise<string> {
+  await init();
+  return wasm.generate_token();
 }
 
-export async function blindToken(token: string, publicKey: string): Promise<BlindingResult> {
-  await initializeCrypto();
-  const result: unknown = blind(token, publicKey);
+export async function blind(token: string, pubKey: string): Promise<BlindingResult> {
+  await init();
+  const blindingResult: unknown = wasm.blind(token, pubKey);
   if (
-    typeof result !== "object" ||
-    result === null ||
-    !("blind_token" in result) ||
-    typeof result.blind_token !== "string" ||
-    !("secret" in result) ||
-    typeof result.secret !== "string"
+    typeof blindingResult !== "object" ||
+    blindingResult === null ||
+    !("blind_token" in blindingResult) ||
+    typeof blindingResult.blind_token !== "string" ||
+    !("secret" in blindingResult) ||
+    typeof blindingResult.secret !== "string"
   ) {
     throw new Error("Wasm から不正なブラインド化結果が返されました。");
   }
-  return { blind_token: result.blind_token, secret: result.secret };
+  return { blind_token: blindingResult.blind_token, secret: blindingResult.secret };
 }
 
-export async function finalizeToken(
-  publicKey: string,
-  blindSignature: string,
-  blinding: BlindingResult,
+export async function finalize(
+  pubKey: string,
+  blindTokenSign: string,
+  blindingResult: BlindingResult,
   token: string,
 ): Promise<string> {
-  await initializeCrypto();
-  return finalize(publicKey, blindSignature, blinding, token);
+  await init();
+  return wasm.finalize(pubKey, blindTokenSign, blindingResult, token);
 }
 
-export async function verifyToken(publicKey: string, signature: string, token: string): Promise<boolean> {
-  await initializeCrypto();
-  return verify(publicKey, signature, token);
+export async function verify(pubKey: string, tokenSign: string, token: string): Promise<boolean> {
+  await init();
+  return wasm.verify(pubKey, tokenSign, token);
 }
