@@ -1,2 +1,3 @@
 [tools]
+"cargo:cargo-watch" = "latest"
 "cargo:wasm-pack" = "latest"
