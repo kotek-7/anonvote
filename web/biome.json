@@ -3,17 +3,9 @@
   "files": {
     "includes": [
       "**",
-      "!.astro",
-      "!.cache",
-      "!.photo-manager",
-      "!photo-manager/target",
-      "!dist",
       "!node_modules",
       "!pnpm-lock.yaml",
-      "!public/fonts",
-      "!public/images",
-      "!public/videos",
-      "!src/assets"
+      "!wasm"
     ]
   },
   "formatter": {

@@ -1,5 +1,6 @@
 {
     "biome.enabled": true,
+    "biome.configurationPath": "web/biome.json",
     "[javascript]": {
         "editor.defaultFormatter": "biomejs.biome"
     },
@@ -7,6 +8,12 @@
         "editor.defaultFormatter": "biomejs.biome"
     },
     "[json]": {
+        "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescriptreact]": {
         "editor.defaultFormatter": "biomejs.biome"
     }
 }
