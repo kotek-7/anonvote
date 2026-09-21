@@ -1,5 +1,5 @@
 //@ts-check
-import init, { blind, finalize, generate_token } from "./pkg/client.js";
+import init, { blind, finalize, generate_token, verify } from "./pkg/client.js";
 
 await init();
 
@@ -39,16 +39,14 @@ generateButton?.addEventListener("click", async (event) => {
 const blindButton = document.getElementById("blind");
 const blindTokenOutput = document.getElementById("blind-token");
 const secretOutput = document.getElementById("secret");
-const tokenRandomizerOutput = document.getElementById("token-randomizer");
 
 let blindToken = "";
 let secret = "";
-let tokenRandomizer = "";
 
 blindButton?.addEventListener("click", async (event) => {
   event.preventDefault();
 
-  /** @type {{blind_token: string, secret: string, msg_randomizer: string }} */
+  /** @type {{blind_token: string, secret: string }} */
   const blindingResult = blind(token, pubKey);
 
   blindToken = blindingResult.blind_token;
@@ -58,10 +56,6 @@ blindButton?.addEventListener("click", async (event) => {
   secret = blindingResult.secret;
   if (secretOutput instanceof HTMLSpanElement) {
     secretOutput.textContent = secret;
-  }
-  tokenRandomizer = blindingResult.msg_randomizer;
-  if (tokenRandomizerOutput instanceof HTMLSpanElement) {
-    tokenRandomizerOutput.textContent = tokenRandomizer;
   }
 });
 
@@ -104,7 +98,6 @@ finalizeButton?.addEventListener("click", async (event) => {
   const blindingResult = {
     blind_token: blindToken,
     secret: secret,
-    msg_randomizer: tokenRandomizer,
   };
 
   tokenSign = finalize(pubKey, blindTokenSign, blindingResult, token);
@@ -112,3 +105,17 @@ finalizeButton?.addEventListener("click", async (event) => {
     tokenSignOutput.textContent = tokenSign;
   }
 });
+
+const verifyButton = document.getElementById("verify");
+const verificationOutput = document.getElementById("verification");
+
+let verification = "";
+
+verifyButton?.addEventListener("click", async (event) => {
+  event.preventDefault();
+
+  verification = verify(pubKey, tokenSign, token) ? "ok" : "failed";
+  if (verificationOutput instanceof HTMLSpanElement) {
+    verificationOutput.textContent = verification;
+  }
+})

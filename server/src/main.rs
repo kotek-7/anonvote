@@ -1,7 +1,7 @@
 use actix_web::{HttpResponse, middleware::Logger};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use blind_rsa_signatures::{DefaultRng, PSS, Randomized, Sha384};
+use blind_rsa_signatures::{DefaultRng, Deterministic, PSS, Sha384};
 use clap::Parser;
 use sqlx::{Postgres, postgres::PgPoolOptions};
 
@@ -58,9 +58,9 @@ async fn start_server(pool: sqlx::Pool<Postgres>) -> std::io::Result<()> {
     .await
 }
 
-type KeyPair = blind_rsa_signatures::KeyPair<Sha384, PSS, Randomized>;
-type PublicKey = blind_rsa_signatures::PublicKey<Sha384, PSS, Randomized>;
-type SecretKey = blind_rsa_signatures::SecretKey<Sha384, PSS, Randomized>;
+type KeyPair = blind_rsa_signatures::KeyPair<Sha384, PSS, Deterministic>;
+type PublicKey = blind_rsa_signatures::PublicKey<Sha384, PSS, Deterministic>;
+type SecretKey = blind_rsa_signatures::SecretKey<Sha384, PSS, Deterministic>;
 
 #[actix_web::post("/api/pubkey")]
 async fn pubkey(pool: actix_web::web::Data<sqlx::PgPool>) -> impl actix_web::Responder {
