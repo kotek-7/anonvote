@@ -1,6 +1,7 @@
 mod certificate_handle;
 mod common;
 mod pubkey_handle;
+mod discord_auth;
 
 use crate::certificate_handle::SignBlindTokenError;
 use actix_web::{HttpResponse, middleware::Logger};
