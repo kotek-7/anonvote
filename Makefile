@@ -1,4 +1,4 @@
-BIN := target/debug/server
+SERVER_BIN := target/debug/server
 
 .PHONY: build-wasm build run start
 
@@ -10,7 +10,7 @@ build: build-wasm
 	cargo build --manifest-path server/Cargo.toml
 
 run: build
-	$(BIN)
+	$(SERVER_BIN)
 
 start: build
-	$(BIN) start 
+	$(SERVER_BIN) start 
