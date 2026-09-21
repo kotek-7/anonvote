@@ -64,21 +64,20 @@ type SecretKey = blind_rsa_signatures::SecretKey<Sha384, PSS, Randomized>;
 
 #[actix_web::post("/api/pubkey")]
 async fn pubkey(pool: actix_web::web::Data<sqlx::PgPool>) -> impl actix_web::Responder {
-    let key_pair = match KeyPair::generate(&mut DefaultRng, 2048) {
-        Ok(key_pair) => key_pair,
+    let key_pair = match fetch_key_pair(&pool).await {
+        Ok(key_pair) => key_pair.unwrap_or(match generate_and_save_key_pair(&pool).await {
+            Ok(key_pair) => key_pair,
+            Err(e) => {
+                log::error!("{e}");
+                return HttpResponse::InternalServerError().finish();
+            }
+        }),
         Err(e) => {
             log::error!("{e}");
             return HttpResponse::InternalServerError().finish();
         }
     };
     let (pub_key, _sec_key) = (&key_pair.pk, &key_pair.sk);
-    match save_key_pair(&key_pair, &pool).await {
-        Ok(_) => {}
-        Err(e) => {
-            log::error!("{e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
     match pub_key.to_pem() {
         Ok(pub_key_pem) => HttpResponse::Ok().body(pub_key_pem),
         Err(e) => {
@@ -90,9 +89,36 @@ async fn pubkey(pool: actix_web::web::Data<sqlx::PgPool>) -> impl actix_web::Res
 
 #[derive(sqlx::FromRow)]
 struct RawKeyPair {
+    #[allow(unused)]
     id: i64,
     pub_key: String,
     sec_key: String,
+}
+
+async fn fetch_key_pair(pool: &sqlx::Pool<Postgres>) -> anyhow::Result<Option<KeyPair>> {
+    let key_pair_result = sqlx::query_as!(
+        RawKeyPair,
+        "SELECT * FROM key_pairs ORDER BY id DESC LIMIT 1"
+    )
+    .fetch_one(pool)
+    .await;
+
+    match key_pair_result {
+        Ok(key_pair) => Ok(Some(KeyPair {
+            pk: PublicKey::from_pem(&key_pair.pub_key)?,
+            sk: SecretKey::from_pem(&key_pair.sec_key)?,
+        })),
+        Err(e) => match e {
+            sqlx::Error::RowNotFound => Ok(None),
+            _ => Err(e.into()),
+        },
+    }
+}
+
+async fn generate_and_save_key_pair(pool: &sqlx::Pool<Postgres>) -> anyhow::Result<KeyPair> {
+    let key_pair = KeyPair::generate(&mut DefaultRng, 2048)?;
+    save_key_pair(&key_pair, &pool).await?;
+    Ok(key_pair)
 }
 
 async fn save_key_pair(key_pair: &KeyPair, pool: &sqlx::Pool<Postgres>) -> anyhow::Result<()> {
@@ -128,7 +154,7 @@ async fn certificate(
             return HttpResponse::BadRequest().finish();
         }
     };
-    let key_pair = match fetch_key_pair(&pub_key, pool.get_ref()).await {
+    let key_pair = match search_key_pair(&pub_key, pool.get_ref()).await {
         Ok(key_pair) => key_pair,
         Err(e) => {
             log::error!("{e}");
@@ -153,12 +179,12 @@ async fn certificate(
     HttpResponse::Ok().body(blind_token_sign_base64)
 }
 
-async fn fetch_key_pair(
+async fn search_key_pair(
     pub_key: &PublicKey,
     pool: &sqlx::Pool<Postgres>,
 ) -> anyhow::Result<KeyPair> {
     let pub_key = &pub_key.to_pem()?;
-    let keypair = sqlx::query_as!(
+    let key_pair = sqlx::query_as!(
         RawKeyPair,
         "SELECT * FROM key_pairs WHERE pub_key = $1",
         &pub_key
@@ -166,7 +192,7 @@ async fn fetch_key_pair(
     .fetch_one(pool)
     .await?;
     Ok(KeyPair {
-        pk: PublicKey::from_pem(&keypair.pub_key)?,
-        sk: SecretKey::from_pem(&keypair.sec_key)?,
+        pk: PublicKey::from_pem(&key_pair.pub_key)?,
+        sk: SecretKey::from_pem(&key_pair.sec_key)?,
     })
 }
