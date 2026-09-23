@@ -11,3 +11,7 @@ pub struct RawKeyPair {
     pub pub_key: String,
     pub sec_key: String,
 }
+
+pub struct AppState {
+    pub pool: sqlx::Pool<sqlx::Postgres>,
+}

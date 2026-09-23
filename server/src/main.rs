@@ -1,9 +1,9 @@
-mod certificate_handle;
+mod certificate_handler;
 mod common;
-mod discord_auth;
-mod pubkey_handle;
+mod login_handler;
+mod pubkey_handler;
 
-use crate::certificate_handle::SignBlindTokenError;
+use axum::routing::{get, post};
 use clap::Parser;
 use sqlx::{Postgres, postgres::PgPoolOptions};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse};
@@ -43,17 +43,18 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-struct AppState {
-    pool: sqlx::Pool<Postgres>,
-}
-
 async fn start_server(pool: sqlx::Pool<Postgres>) -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let state = std::sync::Arc::new(AppState { pool });
+    let state = std::sync::Arc::new(common::AppState { pool });
     let app = axum::Router::new()
-        .route("/api/pubkey", axum::routing::post(pubkey))
-        .route("/api/certificate", axum::routing::post(certificate))
+        .route("/api/pubkey", post(pubkey_handler::pubkey))
+        .route(
+            "/api/certificate",
+            post(certificate_handler::certificate),
+        )
+        .route("/api/login", get(login_handler::login))
+        .route("/api/login/callback", get(login_handler::login_callback))
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
@@ -70,41 +71,4 @@ async fn start_server(pool: sqlx::Pool<Postgres>) -> anyhow::Result<()> {
     .await?;
 
     axum::serve(listener, app).await.map_err(Into::into)
-}
-
-async fn pubkey(
-    axum::extract::State(state): axum::extract::State<std::sync::Arc<AppState>>,
-) -> Result<String, axum::http::StatusCode> {
-    pubkey_handle::resolve_pub_key(&state.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("{e}");
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-struct CertificateRequest {
-    /// Base64-encoded blinded token.
-    pub blind_token: String,
-    /// PEM-encoded public key.
-    pub pub_key: String,
-}
-
-async fn certificate(
-    axum::extract::State(state): axum::extract::State<std::sync::Arc<AppState>>,
-    axum::Json(req): axum::Json<CertificateRequest>,
-) -> Result<String, axum::http::StatusCode> {
-    certificate_handle::sign_blind_token(&req.pub_key, &req.blind_token, &state.pool)
-        .await
-        .map_err(|e| match e {
-            e @ (SignBlindTokenError::InvalidPublicKey(_) | SignBlindTokenError::Decode(_)) => {
-                tracing::warn!("{e}");
-                axum::http::StatusCode::BAD_REQUEST
-            }
-            e @ (SignBlindTokenError::Search(_) | SignBlindTokenError::Sign(_)) => {
-                tracing::error!("{e}");
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR
-            }
-        })
 }

@@ -2,8 +2,19 @@ use crate::common::{KeyPair, PublicKey, RawKeyPair, SecretKey};
 use blind_rsa_signatures::DefaultRng;
 use sqlx::Postgres;
 
+pub async fn pubkey(
+    axum::extract::State(state): axum::extract::State<std::sync::Arc<crate::common::AppState>>,
+) -> Result<String, axum::http::StatusCode> {
+    resolve_pub_key(&state.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("{e}");
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })
+}
+
 #[derive(Debug, thiserror::Error)]
-pub enum ResolvePubKeyError {
+enum ResolvePubKeyError {
     #[error("failed to fetch key pair: {0}")]
     Fetch(#[from] FetchKeyPairError),
     #[error("failed to generate and save key pair: {0}")]
@@ -12,7 +23,7 @@ pub enum ResolvePubKeyError {
     Encode(#[from] blind_rsa_signatures::Error),
 }
 
-pub async fn resolve_pub_key(pool: &sqlx::PgPool) -> Result<String, ResolvePubKeyError> {
+async fn resolve_pub_key(pool: &sqlx::PgPool) -> Result<String, ResolvePubKeyError> {
     let key_pair = match fetch_key_pair(pool).await? {
         Some(key_pair) => key_pair,
         None => generate_and_save_key_pair(pool).await?,
@@ -22,7 +33,7 @@ pub async fn resolve_pub_key(pool: &sqlx::PgPool) -> Result<String, ResolvePubKe
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum FetchKeyPairError {
+enum FetchKeyPairError {
     #[error("database query failed: {0}")]
     Database(#[from] sqlx::Error),
     #[error("failed to decode stored key pair: {0}")]

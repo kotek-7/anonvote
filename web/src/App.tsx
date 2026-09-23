@@ -153,6 +153,10 @@ function App() {
     setError(null);
   }
 
+  function handleDiscordAuth() {
+    location.href = "/api/login"
+  }
+
   return (
     <main>
       <header>
@@ -251,6 +255,13 @@ function App() {
             {verification === null ? "未検証" : verification ? "検証成功" : "検証失敗"}
           </p>
         </Step>
+        <button
+          type="button"
+          id="discord-auth"
+          onClick={handleDiscordAuth}
+        >
+          Discord Auth
+        </button>
       </div>
     </main>
   );

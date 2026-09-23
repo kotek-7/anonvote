@@ -21,9 +21,12 @@ sqlx = { version = "0.9", features = [
     "chrono",
 ] }
 dotenvy = "0.15.7"
-reqwest = { version = "0.13.5", features = ["json", "query"] }
+reqwest = { version = "0.13.5", features = ["form", "json", "query"] }
 axum = "0.8.9"
 tower = { version = "0.5.3", features = ["full"] }
 tower-http = { version = "0.7.1", features = ["trace"] }
 tracing-subscriber = "0.3.23"
 tracing = "0.1.44"
+getrandom = "0.4.3"
+rand = "0.10.3"
+axum-extra = { version = "0.12.6", features = ["cookie"] }
